@@ -102,6 +102,7 @@ export const authController = {
       res.status(201).json({
         message:
           'Registration successful. Please check your email to verify your account.',
+         EmailVerificationToken: verificationToken 
       });
     } catch (err) {
       next(err);
@@ -142,6 +143,7 @@ export const authController = {
       // Redirect to login page on success
       res.redirect(`${process.env.CLIENT_URL}/login?verified=true`);
     } catch (err) {
+      console.log(err)
       // Handle expired token error specifically
       if (err.name === 'TokenExpiredError') {
         return res.redirect(
