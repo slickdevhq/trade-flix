@@ -6,6 +6,7 @@ import { emailService } from '../services/email.service.js';
 import logger from '../config/logger.js';
 import { sendSuccess } from '../utils/response.js';
 import AppError from '../utils/appError.js';
+import axios from 'axios';
 
 // --- Helper Functions ---
 
