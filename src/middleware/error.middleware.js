@@ -73,15 +73,5 @@ export const globalErrorHandler = (err, req, res, next) => {
     }
   }
 
-  // Send production vs development error response
-  if (isProd) {
     return sendError(res, statusCode, code, message, details);
-  }
-
-  // Development: send full error
-  return res.status(statusCode).json({
-    success: false,
-    error: { code, message, details },
-    stack: err.stack,
-  });
 };
