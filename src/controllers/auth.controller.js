@@ -89,7 +89,21 @@ export const authController = {
       if (existingUser) {
         return next(AppError.conflict('Email already in use', 'EMAIL_IN_USE'));
       }
-
+        
+     let emailStatus = 'UNKNOWN';
+    try {
+      const response = await axios.get('https://api.mailbite.io/verify', {
+        params: { key: process.env.MAILBITE_API_KEY, email },
+      });
+      emailStatus = response.data.email_status;
+    } catch (error) {
+      console.log('Mailbite API failed', { error: error.message });
+      // Optionally allow registration to proceed without email verification
+      // or return a specific error
+    }
+    if (emailStatus !== 'VALID' && emailStatus !== 'UNKNOWN') {
+       return next(AppError.badRequest('Email is invalid or does not exist', 'INVALID_EMAIL'));
+    }
       const user = new User({ email, password, name });
       await user.save();
 
