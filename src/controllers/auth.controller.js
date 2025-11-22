@@ -4,6 +4,8 @@ import RefreshToken from '../models/RefreshToken.model.js';
 import { tokenService } from '../services/token.service.js';
 import { emailService } from '../services/email.service.js';
 import logger from '../config/logger.js';
+import { sendSuccess } from '../utils/response.js';
+import AppError from '../utils/appError.js';
 
 // --- Helper Functions ---
 
@@ -39,7 +41,7 @@ const sendAuthTokens = async (res, user, userAgent) => {
   });
 
   // Send the access token and user info in the response body
-  res.status(200).json({
+  return sendSuccess(res, 200, {
     accessToken,
     user: {
       id: user._id,
@@ -85,7 +87,7 @@ export const authController = {
       // Check if user already exists
       const existingUser = await User.findOne({ email });
       if (existingUser) {
-        return res.status(409).json({ message: 'Email already in use' });
+        return next(AppError.conflict('Email already in use', 'EMAIL_IN_USE'));
       }
 
       const user = new User({ email, password, name });
@@ -99,11 +101,12 @@ export const authController = {
         verificationToken
       );
 
-      res.status(201).json({
-        message:
-          'Registration successful. Please check your email to verify your account.',
-         EmailVerificationToken: verificationToken 
-      });
+      return sendSuccess(
+        res,
+        201,
+        null,
+        'Registration successful. Please check your email to verify your account.'
+      );
     } catch (err) {
       next(err);
     }
@@ -130,7 +133,7 @@ export const authController = {
         return res.status(404).json({ message: 'User not found' });
       }
       if (user.isVerified) {
-        return res
+        return res  
           .status(200)
           .redirect(`${process.env.CLIENT_URL}/login?verified=true`);
       }
@@ -169,14 +172,11 @@ export const authController = {
       const user = await User.findOne({ email }).select('+password');
 
       if (!user || !(await user.comparePassword(password))) {
-        return res.status(401).json({ message: 'Invalid email or password' });
+        return next(AppError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS'));
       }
 
       if (!user.isVerified) {
-        return res.status(403).json({
-          message: 'Please verify your email address to log in.',
-          code: 'EMAIL_NOT_VERIFIED',
-        });
+        return next(AppError.forbidden('Please verify your email address to log in.', 'EMAIL_NOT_VERIFIED'));
       }
 
       // User is authenticated and verified, send tokens
@@ -196,7 +196,7 @@ export const authController = {
       const userAgent = req.headers['user-agent'] || 'unknown';
 
       if (!refreshToken) {
-        return res.status(401).json({ message: 'Access denied. No refresh token.' });
+        return next(AppError.unauthorized('Access denied. No refresh token.', 'NO_REFRESH_TOKEN'));
       }
 
       // Hash the incoming token to find it in the DB
@@ -219,7 +219,7 @@ export const authController = {
         // Clear the bad cookie
         clearRefreshTokenCookie(res);
         logger.warn('Invalid or expired refresh token used.');
-        return res.status(403).json({ message: 'Invalid or expired refresh token.' });
+        return next(AppError.forbidden('Invalid or expired refresh token.', 'INVALID_REFRESH_TOKEN'));
       }
 
       // --- Token Rotation ---
@@ -259,7 +259,7 @@ export const authController = {
       // Clear the cookie
       clearRefreshTokenCookie(res);
 
-      res.status(200).json({ message: 'Logged out successfully' });
+      return sendSuccess(res, 200, null, 'Logged out successfully');
     } catch (err) {
       next(err);
     }
@@ -271,23 +271,30 @@ export const authController = {
    */
   forgotPassword: async (req, res, next) => {
     try {
+      console.log('😂😂', req.body)
       const { email } = req.body;
       const user = await User.findOne({ email });
 
       // Important: Always send a success-like response to prevent email enumeration
       if (!user) {
         logger.warn(`Password reset attempt for non-existent user: ${email}`);
-        return res.status(200).json({
-          message: 'If an account with that email exists, a reset link has been sent.',
-        });
+        return sendSuccess(
+          res,
+          200,
+          null,
+          'If an account with that email exists, a reset link has been sent.'
+        );
       }
 
       const resetToken = tokenService.generatePasswordResetToken(user);
       await emailService.sendPasswordResetEmail(user.email, user.name, resetToken);
 
-      res.status(200).json({
-        message: 'If an account with that email exists, a reset link has been sent.',
-      });
+      return sendSuccess(
+        res,
+        200,
+        null,
+        'If an account with that email exists, a reset link has been sent.'
+      );
     } catch (err) {
       next(err);
     }
@@ -303,17 +310,17 @@ export const authController = {
       const { password } = req.body;
 
       if (!token) {
-        return res.status(400).json({ message: 'Missing password reset token' });
+        return next(AppError.badRequest('Missing password reset token', 'MISSING_TOKEN'));
       }
 
       const payload = tokenService.verifyPasswordResetToken(token);
       if (!payload) {
-        return res.status(400).json({ message: 'Invalid or expired token' });
+        return next(AppError.badRequest('Invalid or expired token', 'INVALID_TOKEN'));
       }
 
       const user = await User.findById(payload.sub);
       if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+        return next(AppError.notFound('User not found', 'USER_NOT_FOUND'));
       }
 
       // Set new password
@@ -324,10 +331,10 @@ export const authController = {
       await invalidateAllRefreshTokens(user._id);
 
       logger.info(`Password reset for user: ${user.email}`);
-      res.status(200).json({ message: 'Password reset successful. Please log in.' });
+      return sendSuccess(res, 200, null, 'Password reset successful. Please log in.');
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
-        return res.status(400).json({ message: 'Password reset token has expired.' });
+        return next(AppError.badRequest('Password reset token has expired.', 'TOKEN_EXPIRED'));
       }
       next(err);
     }

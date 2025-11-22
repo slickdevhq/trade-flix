@@ -1,6 +1,7 @@
 import { tokenService } from '../services/token.service.js';
 import User from '../models/User.model.js';
 import logger from '../config/logger.js';
+import AppError from '../utils/appError.js';
 
 /**
  * Middleware to protect routes.
@@ -20,37 +21,31 @@ export const protect = async (req, res, next) => {
       // Verify token
       const payload = tokenService.verifyAccessToken(token);
       if (!payload) {
-        return res.status(401).json({ message: 'Not authorized, token invalid' });
+        return next(AppError.unauthorized('Not authorized, token invalid', 'INVALID_TOKEN'));
       }
 
       // Get user from token
       req.user = await User.findById(payload.sub).select('-password');
       if (!req.user) {
-        return res.status(401).json({ message: 'Not authorized, user not found' });
+        return next(AppError.unauthorized('Not authorized, user not found', 'USER_NOT_FOUND'));
       }
 
       // Check if user email is verified
       if (!req.user.isVerified) {
-        return res.status(403).json({
-          message: 'Not authorized, email not verified',
-          code: 'EMAIL_NOT_VERIFIED',
-        });
+        return next(AppError.forbidden('Not authorized, email not verified', 'EMAIL_NOT_VERIFIED'));
       }
 
       next();
     } catch (err) {
       logger.warn('Token verification failed:', err.message);
       if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          message: 'Not authorized, token expired',
-          code: 'TOKEN_EXPIRED',
-        });
+        return next(AppError.unauthorized('Not authorized, token expired', 'TOKEN_EXPIRED'));
       }
-      return res.status(401).json({ message: 'Not authorized, token invalid' });
+      return next(AppError.unauthorized('Not authorized, token invalid', 'INVALID_TOKEN'));
     }
   }
 
   if (!token) {
-    return res.status(401).json({ message: 'Not authorized, no token' });
+    return next(AppError.unauthorized('Not authorized, no token', 'NO_TOKEN'));
   }
 };

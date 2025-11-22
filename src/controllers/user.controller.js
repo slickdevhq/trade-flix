@@ -1,5 +1,7 @@
 import RefreshToken from '../models/RefreshToken.model.js';
 import logger from '../config/logger.js';
+import { sendSuccess } from '../utils/response.js';
+import AppError from '../utils/appError.js';
 
 export const userController = {
   /**
@@ -8,7 +10,7 @@ export const userController = {
    */
   getMe: (req, res) => {
     // req.user is attached by the 'protect' middleware
-    res.status(200).json({
+    return sendSuccess(res, 200, {
       id: req.user._id,
       email: req.user.email,
       name: req.user.name,
@@ -29,7 +31,7 @@ export const userController = {
         .select('userAgent createdAt expiresAt')
         .sort({ createdAt: -1 });
 
-      res.status(200).json(sessions);
+      return sendSuccess(res, 200, sessions);
     } catch (err) {
       next(err);
     }
@@ -50,18 +52,18 @@ export const userController = {
       });
 
       if (!session) {
-        return res.status(404).json({ message: 'Session not found' });
+        return next(AppError.notFound('Session not found', 'SESSION_NOT_FOUND'));
       }
 
       if (!session.isValid) {
-        return res.status(400).json({ message: 'Session already revoked' });
+        return next(AppError.badRequest('Session already revoked', 'SESSION_ALREADY_REVOKED'));
       }
 
       session.isValid = false;
       await session.save();
 
       logger.info(`Session ${id} revoked for user ${userId}`);
-      res.status(200).json({ message: 'Session revoked successfully' });
+      return sendSuccess(res, 200, null, 'Session revoked successfully');
     } catch (err) {
       next(err);
     }

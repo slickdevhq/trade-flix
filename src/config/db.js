@@ -4,12 +4,13 @@ import logger from './logger.js';
 let connection;
 
 export const connectDB = async () => {
-  if (connection) return connection;
+ // if (connection) return connection;
 
   try {
-    mongoose.set('strictQuery', false);
-    connection = await mongoose.connect(process.env.MONGO_URI);
-    return connection;
+  //  mongoose.set('strictQuery', false);
+  const url = process.env.MONGO_URI
+   await mongoose.connect(url);
+
   } catch (err) {
     logger.error('MongoDB connection error:', err);
     process.exit(1);
