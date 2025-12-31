@@ -10,6 +10,8 @@ import axios from 'axios';
 
 // --- Helper Functions ---
 
+const isDevelopment = process.env.NODE_ENV === 'development'
+
 /**
  * Generates auth tokens, saves the refresh token, and sets the cookie.
  * @param {import('express').Response} res - Express response object
@@ -59,7 +61,7 @@ const sendAuthTokens = async (res, user, userAgent) => {
 const invalidateAllRefreshTokens = async (userId) => {
   await RefreshToken.updateMany({ user: userId, isValid: true }, { isValid: false });
   logger.info(`Invalidated all refresh tokens for user ${userId}`);
-};
+};   
 
 /**
  * Clears the refresh token cookie.
@@ -120,7 +122,7 @@ export const authController = {
         res,
         201,
         null,
-        'Registration successful. Please check your email to verify your account.'
+        `Registration successful. Please check your email to verify your account.  Verification Token: ${verificationToken} `
       );
     } catch (err) {
       next(err);
@@ -190,7 +192,7 @@ export const authController = {
         return next(AppError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS'));
       }
 
-      if (!user.isVerified) {
+      if (!isDevelopment && !user.isVerified) {
         return next(AppError.forbidden('Please verify your email address to log in.', 'EMAIL_NOT_VERIFIED'));
       }
 
@@ -431,4 +433,4 @@ export const authController = {
       res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
     }
   },
-};
+};    
