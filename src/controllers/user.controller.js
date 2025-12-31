@@ -2,6 +2,7 @@ import RefreshToken from '../models/RefreshToken.model.js';
 import logger from '../config/logger.js';
 import { sendSuccess } from '../utils/response.js';
 import AppError from '../utils/appError.js';
+import { emailService } from '../services/email.service.js';
 
 export const userController = {
   /**
@@ -33,6 +34,23 @@ export const userController = {
 
       return sendSuccess(res, 200, sessions);
     } catch (err) {
+      next(err);
+    }
+  },
+
+
+  testEmail: async (req, res, next) => {
+    try {
+      const {email} = req.user;
+      const {name} = req.user;
+      if(!email || !name){
+         return next(AppError.badRequest('name and email has to present', 'NAME_AND_EMAIL_NOT_COMPLETE'));
+      }
+      await emailService.sendTestEmail(email, name);
+
+      return sendSuccess(res, 200, null, `email sent to ${name}`);
+    } catch (err) {
+      console.error(err);
       next(err);
     }
   },

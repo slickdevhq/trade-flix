@@ -26,7 +26,8 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pino": "^8.17.2",
-    "pino-http": "^9.0.0"
+    "pino-http": "^9.0.0",
+    "resend": "^6.6.0"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.23.6",

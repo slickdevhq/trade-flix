@@ -7,4 +7,6 @@ router.get('/me', userController.getMe);
 router.get('/sessions', userController.getSessions);
 router.post('/sessions/:id/revoke', userController.revokeSession);
 
+router.post('/test-email', userController.testEmail);
+
 export default router;

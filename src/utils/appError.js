@@ -29,4 +29,4 @@ export default class AppError extends Error {
   static internal(message = 'Internal server error', code = 'INTERNAL_ERROR', details) {
     return new AppError(500, message, code, details);
   }
-}
+}   

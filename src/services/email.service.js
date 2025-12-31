@@ -1,6 +1,7 @@
 import transporter from '../config/email.js';
 import logger from '../config/logger.js';
 
+console.log(process.env.EMAIL_FROM)
 const sendEmail = async (to, subject, html) => {
   const mailOptions = {
     from: process.env.EMAIL_FROM,
@@ -13,7 +14,8 @@ const sendEmail = async (to, subject, html) => {
     await transporter.sendMail(mailOptions);
     logger.info(`Email sent to ${to} with subject "${subject}"`);
   } catch (err) {
-    logger.error(`Error sending email to ${to}:`, err);
+    console.error('The email disturbing error 🔥', err)
+    logger.error(`Error sending email to ${to}:`, err.message);
     // Do not throw here, just log. Email failure shouldn't crash the app.
   }
 };
@@ -29,6 +31,21 @@ export const emailService = {
       <h1>Welcome, ${name}!</h1>
       <p>Thanks for signing up for Tradeflix. Please verify your email address by clicking the link below:</p>
       <a href="${verificationUrl}" style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a>
+      <p>This link will expire in 1 day.</p>
+      <p>If you did not sign up for this account, you can ignore this email.</p>
+    `;
+    await sendEmail(to, subject, html);
+  },
+
+  /**
+   * Test run an email.
+   */
+  sendTestEmail: async (to, name) => {
+    const subject = 'Testing email';
+    const html = `
+      <h1>Welcome, ${name}!</h1>
+      <p>Thanks for signing up for Tradeflix. Please verify your email address by clicking the link below:</p>
+      <a href="" style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a>
       <p>This link will expire in 1 day.</p>
       <p>If you did not sign up for this account, you can ignore this email.</p>
     `;
