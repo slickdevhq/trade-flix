@@ -6,6 +6,8 @@ export const createTradeSchema = Joi.object({
   side: Joi.string().valid('long', 'short').required(),
   entryPrice: Joi.number().min(0).required(),
   exitPrice: Joi.number().min(0).optional().allow(null),
+  stopLoss: Joi.number().min(0).optional().allow(null),
+  targetPrice: Joi.number().min(0).optional().allow(null), // Added for proper R:R calculation
   size: Joi.number().min(0).required(),
   notes: Joi.string().max(5000).optional().allow('', null),
   tags: Joi.alternatives()
@@ -13,7 +15,9 @@ export const createTradeSchema = Joi.object({
     .optional(),
   sentiment: Joi.string().valid('bullish', 'bearish', 'neutral').optional(),
   newsImpact: Joi.string().valid('high', 'medium', 'low', 'none').optional(),
-  rr: Joi.number().min(0).optional(),
+  rr: Joi.number().min(0).optional(), // Manual override allowed
+  pnl: Joi.number().optional(), // Allowed for manual override (e.g., from imports)
+  status: Joi.string().valid('open', 'closed').optional(), // Auto-calculated but can be set
 });
 
 export const updateTradeSchema = Joi.object({
@@ -22,6 +26,8 @@ export const updateTradeSchema = Joi.object({
   side: Joi.string().valid('long', 'short').optional(),
   entryPrice: Joi.number().min(0).optional(),
   exitPrice: Joi.number().min(0).optional().allow(null),
+  stopLoss: Joi.number().min(0).optional().allow(null),
+  targetPrice: Joi.number().min(0).optional().allow(null), // Added
   size: Joi.number().min(0).optional(),
   notes: Joi.string().max(5000).optional().allow('', null),
   tags: Joi.alternatives()
@@ -30,6 +36,8 @@ export const updateTradeSchema = Joi.object({
   sentiment: Joi.string().valid('bullish', 'bearish', 'neutral').optional(),
   newsImpact: Joi.string().valid('high', 'medium', 'low', 'none').optional(),
   rr: Joi.number().min(0).optional(),
+  pnl: Joi.number().optional(),
+  status: Joi.string().valid('open', 'closed').optional(),
 }).min(1);
 
 export const listTradesQuerySchema = Joi.object({
@@ -47,6 +55,9 @@ export const listTradesQuerySchema = Joi.object({
   maxPnl: Joi.number().optional(),
   rrMin: Joi.number().optional(),
   rrMax: Joi.number().optional(),
+  symbol: Joi.string().optional(),
+  status: Joi.string().valid('open', 'closed').optional(), // Added for filtering open/closed trades
+  format: Joi.string().valid('simple', 'detailed').optional(),
 });
 
 export const importTextSchema = Joi.object({

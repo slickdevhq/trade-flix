@@ -9,8 +9,11 @@ const TradeSchema = new mongoose.Schema(
     side: { type: String, required: true, enum: ['long', 'short'], index: true },
 
     entryPrice: { type: Number, required: true, min: 0 },
-    exitPrice: { type: Number, min: 0 }, // may be empty if trade is open
-    size: { type: Number, required: true, min: 0 }, // number of shares/contracts
+    exitPrice: { type: Number, min: 0 },
+    stopLoss: { type: Number, min: 0 },
+    targetPrice: { type: Number, min: 0 },
+    
+    size: { type: Number, required: true, min: 0 },
 
     notes: { type: String, trim: true },
     tags: { type: [String], default: [], index: true },
@@ -18,15 +21,20 @@ const TradeSchema = new mongoose.Schema(
     sentiment: { type: String, enum: ['bullish', 'bearish', 'neutral'], default: undefined },
     newsImpact: { type: String, enum: ['high', 'medium', 'low', 'none'], default: undefined },
 
-    rr: { type: Number, min: 0 }, // optional risk/reward ratio if provided manually
+    mistakes: { 
+      type: [String], 
+      enum: ['late_exit', 'early_entry', 'position_sizing', 'stop_loss', 'fomo', 'revenge_trading', 'overtrading', 'ignored_plan', 'emotional'], 
+      default: [],
+      index: true 
+    },
 
-    // Stored PnL for fast queries; recalculated in hooks on create/update
+    rr: { type: Number, min: 0 },
     pnl: { type: Number, default: 0, index: true },
+    status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
   },
   { timestamps: true }
 );
 
-// Normalize tags to lowercase and trimmed
 TradeSchema.pre('save', function (next) {
   if (Array.isArray(this.tags)) {
     this.tags = this.tags
@@ -35,46 +43,116 @@ TradeSchema.pre('save', function (next) {
       .filter((t) => t.length > 0);
   }
 
-  // Recalculate PnL if we have exitPrice
-  if (typeof this.exitPrice === 'number' && typeof this.entryPrice === 'number' && typeof this.size === 'number') {
-    const diff = this.side === 'long' ? (this.exitPrice - this.entryPrice) : (this.entryPrice - this.exitPrice);
-    this.pnl = Number((diff * this.size).toFixed(2));
+  this.status = (typeof this.exitPrice === 'number' && this.exitPrice > 0) ? 'closed' : 'open';
+
+  if (this.status === 'closed') {
+    const diff = this.side === 'long'
+      ? (this.exitPrice - this.entryPrice)
+      : (this.entryPrice - this.exitPrice);
+
+    this.pnl = Math.round(diff * this.size * 100) / 100;
+  } else {
+    this.pnl = 0;
+  }
+
+  if (
+    typeof this.stopLoss === 'number' &&
+    typeof this.targetPrice === 'number' &&
+    typeof this.entryPrice === 'number' &&
+    this.stopLoss > 0 &&
+    this.targetPrice > 0 &&
+    typeof this.rr !== 'number'
+  ) {
+    const risk = Math.abs(this.entryPrice - this.stopLoss);
+    const reward = Math.abs(this.targetPrice - this.entryPrice);
+    
+    if (risk > 0) {
+      this.rr = Math.round((reward / risk) * 100) / 100;
+    }
   }
 
   next();
 });
 
-// Also recalc pnl on updates via findOneAndUpdate
 TradeSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate() || {};
-
-  const entryPrice = update.entryPrice ?? this._conditions.entryPrice;
-  const exitPrice = update.exitPrice ?? this._conditions.exitPrice;
-  const size = update.size ?? this._conditions.size;
-  const side = update.side ?? this._conditions.side;
-
-  if (
-    typeof entryPrice === 'number' &&
-    typeof exitPrice === 'number' &&
-    typeof size === 'number' &&
-    typeof side === 'string'
-  ) {
-    const diff = side === 'long' ? (exitPrice - entryPrice) : (entryPrice - exitPrice);
-    update.pnl = Number((diff * size).toFixed(2));
-    this.setUpdate(update);
-  }
-
-  // Normalize tags if provided
+  
   if (Array.isArray(update.tags)) {
     update.tags = update.tags
       .filter(Boolean)
       .map((t) => String(t).trim().toLowerCase())
       .filter((t) => t.length > 0);
-    this.setUpdate(update);
   }
 
+  if ('exitPrice' in update) {
+    update.status = (typeof update.exitPrice === 'number' && update.exitPrice > 0) ? 'closed' : 'open';
+  }
+  
+  this.setUpdate(update);
   next();
 });
 
+// CRITICAL FIX: Use updateOne to prevent infinite recursion
+TradeSchema.post('findOneAndUpdate', async function(doc) {
+  if (!doc) return;
+  
+  const needsRecalc = doc.entryPrice && doc.size;
+  
+  if (needsRecalc) {
+    let needsSave = false;
+    const updates = {};
+    
+    const newStatus = (typeof doc.exitPrice === 'number' && doc.exitPrice > 0) ? 'closed' : 'open';
+    if (doc.status !== newStatus) {
+      updates.status = newStatus;
+      needsSave = true;
+    }
+    
+    let newPnl = 0;
+    if (newStatus === 'closed') {
+      const diff = doc.side === 'long'
+        ? (doc.exitPrice - doc.entryPrice)
+        : (doc.entryPrice - doc.exitPrice);
+      newPnl = Math.round(diff * doc.size * 100) / 100;
+    }
+    
+    if (doc.pnl !== newPnl) {
+      updates.pnl = newPnl;
+      needsSave = true;
+    }
+    
+    if (
+      typeof doc.stopLoss === 'number' &&
+      typeof doc.targetPrice === 'number' &&
+      doc.stopLoss > 0 &&
+      doc.targetPrice > 0
+    ) {
+      const risk = Math.abs(doc.entryPrice - doc.stopLoss);
+      const reward = Math.abs(doc.targetPrice - doc.entryPrice);
+      
+      if (risk > 0) {
+        const newRR = Math.round((reward / risk) * 100) / 100;
+        if (doc.rr !== newRR) {
+          updates.rr = newRR;
+          needsSave = true;
+        }
+      }
+    }
+    
+    // Use updateOne to avoid triggering hooks again
+    if (needsSave) {
+      await mongoose.model('Trade').updateOne(
+        { _id: doc._id },
+        { $set: updates }
+      );
+    }
+  }
+});
+
+TradeSchema.index({ user: 1, date: 1 });
+TradeSchema.index({ user: 1, status: 1 });
+TradeSchema.index({ user: 1, pnl: 1 });
+TradeSchema.index({ user: 1, mistakes: 1 });
+
 const Trade = mongoose.model('Trade', TradeSchema);
-export default Trade;  
+export default Trade;

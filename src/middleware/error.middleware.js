@@ -103,6 +103,22 @@ export const globalErrorHandler = (err, req, res, next) => {
     message = 'Your token has expired. Please log in again.';
   }
 
+  // Case G: Network / Database Connection Errors (ENOTFOUND, ETIMEDOUT, ECONNREFUSED)
+  else if (err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
+    isTrustedError = true;
+    statusCode = 503; // Service Unavailable
+    code = 'NETWORK_ERROR';
+    message = 'Unable to connect to the database. Please check your internet connection or hotspot.';
+  }
+
+  // Case H: Mongoose Connection Timeout
+  else if (err.name === 'MongooseServerSelectionError') {
+    isTrustedError = true;
+    statusCode = 503;
+    code = 'DATABASE_CONNECTION_ERROR';
+    message = 'Database connection timed out. Check your network or MongoDB Atlas whitelist.';
+  }
+  
   // ---------------------------------------------------
   // PHASE 2: SANITIZE UNTRUSTED ERRORS (THE SAFETY NET)
   // ---------------------------------------------------

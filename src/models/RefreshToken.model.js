@@ -22,6 +22,7 @@ const refreshTokenSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    lastUsedAt: { type: Date, default: Date.now }
   },
   {
     timestamps: true, // adds createdAt

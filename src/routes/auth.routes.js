@@ -1,57 +1,89 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import passport from 'passport';
-import { authController } from '../controllers/auth.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { protect } from '../middleware/auth.middleware.js';
+import {
+  register,
+  login,
+  logout,
+  refreshToken,
+  verifyEmail,
+  resendVerificationEmail,
+  forgotPassword,
+  resetPassword,
+  getCurrentUser,
+  googleCallback,
+} from '../controllers/auth.controller.js';
+
 import {
   registerSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  resendVerificationSchema,
 } from '../validation/auth.validation.js';
 
 const router = Router();
 
-// --- Email/Password Routes ---
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { success: false, message: 'Too many attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-router.post('/register', validate(registerSchema), authController.register);
-router.post('/login', validate(loginSchema), authController.login);
-router.post('/logout', authController.logout);
-router.post('/refresh-token', authController.refreshToken);
+// ───────────────────────────────────────────────
+// Public: Email/Password Authentication
+// ───────────────────────────────────────────────
 
-// --- Email Verification ---
-router.get('/verify-email', authController.verifyEmail);
+router.post('/register', authLimiter, validate(registerSchema), register);
+router.post('/login', authLimiter, validate(loginSchema), login);
+router.post('/logout', logout);
+router.post('/refresh-token', refreshToken);
 
-// --- Password Reset ---
+// ───────────────────────────────────────────────
+// Public: Email Verification & Password Reset
+// ───────────────────────────────────────────────
+
+router.get('/verify-email', verifyEmail);
+
 router.post(
-  '/forgot-password',
-  validate(forgotPasswordSchema),
-  authController.forgotPassword
-);
-router.post(
-  '/reset-password',
-  validate(resetPasswordSchema),
-  authController.resetPassword
+  '/verify-email/resend',
+  authLimiter,
+  validate(resendVerificationSchema),
+  resendVerificationEmail
 );
 
-// --- Google OAuth Routes ---
+router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), forgotPassword);
+router.post('/reset-password', validate(resetPasswordSchema), resetPassword);
 
-// 1. Redirect to Google
+// ───────────────────────────────────────────────
+// Protected: Current User
+// ───────────────────────────────────────────────
+
+router.get('/me', protect, getCurrentUser);
+
+// ───────────────────────────────────────────────
+// OAuth: Google Authentication
+// ───────────────────────────────────────────────
+
 router.get(
   '/google',
   passport.authenticate('google', {
     scope: ['profile', 'email'],
-    session: false, // We are using JWTs, not sessions
+    session: false,
   })
 );
 
-// 2. Google callback
 router.get(
   '/google/callback',
   passport.authenticate('google', {
     failureRedirect: `${process.env.CLIENT_URL}/login?error=oauth_failed`,
     session: false,
   }),
-  authController.googleCallback
+  googleCallback
 );
 
 export default router;

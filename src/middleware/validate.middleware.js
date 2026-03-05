@@ -1,18 +1,47 @@
 /**
- * Creates a middleware function to validate request body against a Joi schema.
- * @param {import('joi').Schema} schema - The Joi schema to validate against
+ * Validate request data (body, query, or params) against Joi schema
+ * Supports both:
+ * 1. Direct Joi schema (old style) ✅
+ * 2. Object with body/query/params (new style) ✅
  */
-export const validate = (schema) => (req, res, next) => {
-  const { error } = schema.validate(req.body, {
-    abortEarly: false, // Return all errors
-    stripUnknown: true, // Remove unknown properties
-  });
+export const validate = (schema, property = 'body') => (req, res, next) => {
+  try {
+    // If schema has validate method → old style
+    if (typeof schema.validate === 'function') {
+      const { error, value } = schema.validate(req[property], {
+        abortEarly: false,
+        stripUnknown: true,
+      });
 
-  if (error) {
-    // Pass the Joi error to the global error handler
-    error.isJoi = true;
-    return next(error);
+      if (error) {
+        error.isJoi = true;
+        return next(error);
+      }
+
+      req[property] = value;
+      return next();
+    }
+
+    // If schema is object with body/query/params → new style
+    const props = ['body', 'query', 'params'];
+    for (const prop of props) {
+      if (schema[prop]) {
+        const { error, value } = schema[prop].validate(req[prop], {
+          abortEarly: false,
+          stripUnknown: true,
+        });
+
+        if (error) {
+          error.isJoi = true;
+          return next(error);
+        }
+
+        req[prop] = value;
+      }
+    }
+
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  next();
 };

@@ -9,4 +9,6 @@ router.post('/sessions/:id/revoke', userController.revokeSession);
 
 router.post('/test-email', userController.testEmail);
 
-export default router;
+export default router;   
+
+ 

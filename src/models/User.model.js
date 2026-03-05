@@ -1,6 +1,27 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const PreferencesSchema = new mongoose.Schema(
+  {
+    darkMode: { type: Boolean, default: false },
+    pushNotifications: { type: Boolean, default: false },
+    emailDigest: { type: Boolean, default: false },
+    aiInsights: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
+const SubscriptionSchema = new mongoose.Schema(
+  {
+    tier: { type: String, enum: ['free', 'pro'], default: 'free' },
+    monthlyTradeCount: { type: Number, default: 0 },
+    resetDate: { type: Date, default: null },
+    tradeLimit: { type: Number, default: 50 },
+    aiAccess: { type: String, enum: ['limited', 'unlimited'], default: 'limited' },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -33,7 +54,15 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+      initialBalance: { 
+    type: Number, 
+    default: 0, 
+    min: 0 
   },
+    preferences: { type: PreferencesSchema, default: () => ({}) },
+    subscription: { type: SubscriptionSchema, default: () => ({}) },
+  },
+  
   {
     timestamps: true,
   }
