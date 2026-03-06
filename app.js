@@ -11,6 +11,8 @@ import { globalErrorHandler, notFoundHandler } from './src/middleware/error.midd
 
 const app = express();
 
+app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies when behind Vercel's proxy)
+
 // Logger
 app.use(pinoHttp({ logger }));
 
